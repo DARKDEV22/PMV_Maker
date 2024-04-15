@@ -1,6 +1,6 @@
 # PMV maker
 tool for make pmv video from timestamp music.
-1. download .zip from [here]()
+1. download .zip from [here](https://github.com/DARKDEV22/PMV_Maker/releases/download/pmv/pmv-maker.zip)
 2. put videos in **videos** folder (many as you want)
 3. open pmv-maker.exe : select music_theme
 4. waiting : it's will randomly cut and order videos (if get error wait for finished and rename some video then run .exe again)
