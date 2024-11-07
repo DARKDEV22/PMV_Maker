@@ -1,13 +1,12 @@
-use std::fs;
-use std::str;
 use std::fs::File;
+use std::{fs, str, io};
 use std::process::Command;
 use std::collections::HashMap;
-use std::io::{BufReader, BufRead};
+use std::io::{BufRead, BufReader, Write};
 use rand::seq::SliceRandom;
 
-fn load_template(file_name: String) -> Result<Vec<String>, ()> {
-    let file_path = format!("template/{}.txt", file_name);
+fn load_template(file_path: String) -> Result<Vec<String>, ()> {
+    // let file_path = format!("template/{}.txt", file_name);
     if let Ok(file) = File::open(&file_path) {
         let reader = BufReader::new(file);
         let mut timestamps = Vec::new();
@@ -163,7 +162,8 @@ fn seconds_to_time(seconds: f64) -> String {
     format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds_whole, milliseconds)
 }
 
-fn add_timestamps(timestamp1: &str, timestamp2: &str, fps: f32) -> String {
+// fn add_timestamps(timestamp1: &str, timestamp2: &str, fps: f32) -> String {
+fn add_timestamps(timestamp1: &str, timestamp2: &str) -> String {
     // Function to convert timestamp to total milliseconds
     fn timestamp_to_milliseconds(timestamp: &str) -> u32 {
         let parts: Vec<&str> = timestamp.split(":").collect();
@@ -176,16 +176,18 @@ fn add_timestamps(timestamp1: &str, timestamp2: &str, fps: f32) -> String {
     }
 
     // Function to convert total milliseconds to timestamp string
-    fn milliseconds_to_timestamp(milliseconds: u32, fps: f32) -> String {
+    // fn milliseconds_to_timestamp(milliseconds: u32, fps: f32) -> String {
+    fn milliseconds_to_timestamp(milliseconds: u32) -> String {
         let hours = milliseconds / 3600_000;
         let minutes = (milliseconds % 3600_000) / 60_000;
         let mut seconds = (milliseconds % 60_000) / 1000;
         let mut milliseconds = milliseconds % 1000;
-        if (fps * 100.0) % 100.0 != 0.0 {
-            let s_ms = (seconds*1000) + milliseconds -50;
-            seconds = (s_ms/1000) as u32;
-            milliseconds = (s_ms%1000) as u32;
-        }
+        // if (fps * 100.0) % 100.0 != 0.0 {
+        // if (fps%2.0) != 0.0 {
+        //     let s_ms = (seconds*1000) + milliseconds -50;
+        //     seconds = (s_ms/1000) as u32;
+        //     milliseconds = (s_ms%1000) as u32;
+        // }
         format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, milliseconds)
     }
     
@@ -193,28 +195,44 @@ fn add_timestamps(timestamp1: &str, timestamp2: &str, fps: f32) -> String {
     let total_milliseconds =
         timestamp_to_milliseconds(timestamp1) + timestamp_to_milliseconds(timestamp2);
 
-    milliseconds_to_timestamp(total_milliseconds, fps)
+    // milliseconds_to_timestamp(total_milliseconds, fps)
+    milliseconds_to_timestamp(total_milliseconds)
 }
 
 // ffmpeg -i a.mp4 -ss 00:01:02.500 -t 00:01:03.250 -c copy x2.mp4
 // start, duration
 fn main() {
-    let music_theme = String::from("2phut_hon");
+    println!("\n PMV Maker");
+    let theme = list_files_in_directory("template").unwrap();
+    for (idx, music_theme) in theme.iter().enumerate() {
+        if let Some(file_name) = music_theme.split('\\').last() {
+            if let Some(name) = file_name.split('.').next() {
+                let uppercase_name = name.to_uppercase();
+                println!("{}: {}", idx+1, uppercase_name);
+                }
+            }
+    }
+    println!("Select Music Theme : [1-{}]", theme.len());
+    let mut music_theme = String::new();
+    io::stdout().flush().unwrap(); // displayed prompt
+    io::stdin().read_line(&mut music_theme).expect("Failed to read");
+    let music_theme_idx: usize = music_theme.trim().parse().unwrap();
+    let music_theme = &theme[music_theme_idx - 1];
     let seconds = load_template(music_theme.clone()).unwrap();
     let seconds: Vec<String> = adjust_millisec(seconds);
     // let seconds = extract_seconds(timestamps);
     let n_section = seconds.len();
     let videos_path = list_files_in_directory("videos").unwrap();
     // fps: affect of ffmpeg cut seconds: if not round (29.97) -> -= 50ms
-    let mut fps_arr = Vec::new();
-    for video_path in &videos_path {
-        let output = Command::new("ffmpeg")
-            .args(&["-i", video_path])
-            .output().unwrap();
-        let out_str = String::from_utf8_lossy(&output.stderr);
-        let fps = extract_fps(&out_str).unwrap();
-        fps_arr.push(fps);
-    }
+    // let mut fps_arr = Vec::new();
+    // for video_path in &videos_path {
+    //     let output = Command::new("ffmpeg")
+    //         .args(&["-i", video_path])
+    //         .output().unwrap();
+    //     let out_str = String::from_utf8_lossy(&output.stderr);
+    //     let fps = extract_fps(&out_str).unwrap();
+    //     fps_arr.push(fps);
+    // }
     let n_videos = videos_path.len();
     println!("\nLoaded Template: {}", music_theme);
 
@@ -242,7 +260,7 @@ fn main() {
     for idx in 0..n_videos {
         details.insert(idx, vec![]);
     }
-    let reduction = 0.4; // 20% cut edge 
+    let reduction = 0.3; // 15% cut edge 
     for (idx, video_path) in videos_path.iter().enumerate() {
         let duration = get_video_duration(&video_path).unwrap();
         let iterval = (duration*(1.0-reduction)/n_parts[&idx] as f32) as u32 as f32;
@@ -270,7 +288,8 @@ fn main() {
         let start_second = details.get(order).unwrap()[*use_idx];
         let ss = seconds_to_time(start_second);
         let t = &seconds[section];
-        let to = add_timestamps(&ss, t, fps_arr[*order]);
+        let to = add_timestamps(&ss, t);
+        // let to = add_timestamps(&ss, t, fps_arr[*order]);
         let dest_path = format!("temp_videos/{}.mp4", section+1);
         let args = [
             "-i",
@@ -289,6 +308,7 @@ fn main() {
             "1",
             &dest_path
         ];
+
 
         let res = Command::new("ffmpeg")
             .args(args)
